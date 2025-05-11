@@ -1,8 +1,6 @@
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from fpdf import FPDF
 from datetime import datetime, timedelta
 import re
 import json
@@ -11,7 +9,7 @@ import os
 HISTORY_FILE = "history.json"
 
 def clean_text(text):
-    return re.sub(r'[^ -ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()"']+', '', text)
+    return re.sub(r"[^\x00-\x7FąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()\"'-]+", '', text)
 
 def safe_text(text):
     return text.encode("ascii", "ignore").decode()
@@ -79,7 +77,9 @@ def load_history(days=7):
     cutoff = datetime.now().date() - timedelta(days=days)
     return [entry for entry in history if datetime.strptime(entry["date"], "%Y-%m-%d").date() >= cutoff]
 
-st.title("🧠 Daily AI Digest – z archiwum 7 dni")
+# --- INTERFEJS ---
+
+st.title("🧠 Daily AI Digest – Archiwum 7 dni")
 st.write("Podsumowanie nowości z OpenAI i Product Hunt z ostatniego tygodnia.")
 
 if st.button("🔄 Odśwież dane (dzisiaj)"):
@@ -95,6 +95,6 @@ for entry in sorted(history, key=lambda x: x['date'], reverse=True):
     st.markdown("**OpenAI Blog:**")
     for item in entry["openai"]:
         st.markdown(f"- [{item['title']}]({item['url']})")
-    st.markdown("**Product Hunt (AI Projects):**")
+    st.markdown("**Product Hunt – AI Projects:**")
     for name in entry["producthunt"]:
         st.markdown(f"- {name}")
