@@ -1,12 +1,17 @@
+
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 from fpdf import FPDF
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
+import json
+import os
+
+HISTORY_FILE = "history.json"
 
 def clean_text(text):
-    return re.sub(r'[^\x00-\x7FąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()"\']+', '', text)
+    return re.sub(r'[^ -ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()"']+', '', text)
 
 def safe_text(text):
     return text.encode("ascii", "ignore").decode()
@@ -47,51 +52,49 @@ def get_producthunt_ai():
             break
     return ai_projects
 
-def generate_pdf(openai_news, ph_projects):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", size=12)
+def save_to_history(openai_news, ph_projects):
+    today = str(datetime.now().date())
+    data = {
+        "date": today,
+        "openai": openai_news,
+        "producthunt": ph_projects
+    }
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            history = json.load(f)
+    else:
+        history = []
 
-    pdf.cell(200, 10, txt=safe_text("Daily AI Digest"), ln=True, align='C')
-    pdf.cell(200, 10, txt=str(datetime.now().date()), ln=True, align='C')
-    pdf.ln(10)
+    history = [entry for entry in history if entry["date"] != today]
+    history.append(data)
 
-    pdf.set_font("Helvetica", size=12)
-    pdf.cell(200, 10, txt=safe_text("OpenAI Blog"), ln=True)
-    pdf.set_font("Helvetica", size=11)
-    for item in openai_news:
-        pdf.multi_cell(0, 10, safe_text(f"- {item['title']} ({item['url']})"))
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
 
-    pdf.ln(5)
-    pdf.set_font("Helvetica", size=12)
-    pdf.cell(200, 10, txt=safe_text("Product Hunt - AI Projects"), ln=True)
-    pdf.set_font("Helvetica", size=11)
-    for name in ph_projects:
-        pdf.cell(200, 10, safe_text(f"- {name}"), ln=True)
+def load_history(days=7):
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+        history = json.load(f)
+    cutoff = datetime.now().date() - timedelta(days=days)
+    return [entry for entry in history if datetime.strptime(entry["date"], "%Y-%m-%d").date() >= cutoff]
 
-    path = "/tmp/ai_digest.pdf"
-    pdf.output(path)
-    return path
+st.title("🧠 Daily AI Digest – z archiwum 7 dni")
+st.write("Podsumowanie nowości z OpenAI i Product Hunt z ostatniego tygodnia.")
 
-st.title("Daily AI Digest")
-st.write("Automatyczne podsumowanie nowości z OpenAI i Product Hunt")
-
-if st.button("Refresh Data"):
+if st.button("🔄 Odśwież dane (dzisiaj)"):
     openai_news = get_openai_news()
     ph_projects = get_producthunt_ai()
-    st.success("Dane zostały zaktualizowane.")
-else:
-    openai_news = get_openai_news()
-    ph_projects = get_producthunt_ai()
+    save_to_history(openai_news, ph_projects)
+    st.success("Dane zaktualizowane i zapisane w historii!")
 
-st.subheader("OpenAI Blog")
-for news in openai_news:
-    st.markdown(f"- [{news['title']}]({news['url']})")
+history = load_history()
 
-st.subheader("Top AI Projects from Product Hunt")
-for name in ph_projects:
-    st.markdown(f"- {name}")
-
-pdf_path = generate_pdf(openai_news, ph_projects)
-with open(pdf_path, "rb") as f:
-    st.download_button("Download PDF", f, file_name="daily_ai_digest.pdf")
+for entry in sorted(history, key=lambda x: x['date'], reverse=True):
+    st.subheader(f"📅 {entry['date']}")
+    st.markdown("**OpenAI Blog:**")
+    for item in entry["openai"]:
+        st.markdown(f"- [{item['title']}]({item['url']})")
+    st.markdown("**Product Hunt (AI Projects):**")
+    for name in entry["producthunt"]:
+        st.markdown(f"- {name}")
