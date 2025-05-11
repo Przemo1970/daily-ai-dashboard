@@ -12,7 +12,7 @@ KEYWORDS = ["openai", "chatgpt", "gpt", "ai", "announcement", "launch", "product
 
 # === Funkcje pomocnicze ===
 def clean_text(text):
-    return re.sub(r'[^ -~ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()\"’‘]+', '', text)
+    return re.sub(r'[^ -~ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()"’‘]+', '', text)
 
 def fetch_rss_entries():
     feeds = [
@@ -28,18 +28,23 @@ def fetch_rss_entries():
                     "source": source_name,
                     "title": entry.get("title", "No title"),
                     "summary": entry.get("summary", "No summary"),
-                    "date": entry.get("published", entry.get("updated", "")),
+                    "date": entry.get("published", entry.get("updated", datetime.utcnow().isoformat())),
                     "url": entry.get("link", "#")
                 })
         except Exception as e:
             print(f"Błąd pobierania z {feed_url}: {e}")
+    print(f"Wczytano {len(entries)} wpisów ze wszystkich źródeł")
     return entries
 
 def parse_date(date_str):
     try:
-        return datetime(*feedparser._parse_date(date_str)[:6])
+        parsed = feedparser._parse_date(date_str)
+        if parsed:
+            return datetime(*parsed[:6])
+        else:
+            return datetime.utcnow()
     except:
-        return datetime.utcnow() - timedelta(days=30)
+        return datetime.utcnow()
 
 def filter_entries(entries, keywords, days):
     today = datetime.utcnow()
@@ -57,6 +62,7 @@ def filter_entries(entries, keywords, days):
             print(f"Błąd przy analizie wpisu: {e}")
             continue
 
+    print(f"Po filtrze pozostało {len(results)} wpisów")
     return results
 
 # === Dane ===
