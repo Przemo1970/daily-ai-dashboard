@@ -1,100 +1,76 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+import feedparser
 import re
-import json
-import os
 
-HISTORY_FILE = "history.json"
+st.set_page_config(page_title="Daily AI Digest", layout="wide")
 
+# === Konfiguracja ===
+DAYS_BACK = 7
+KEYWORDS = ["openai", "chatgpt", "gpt", "ai", "announcement", "launch", "product", "update"]
+
+# === Funkcje pomocnicze ===
 def clean_text(text):
-    return re.sub(r"[^\x00-\x7FąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()\"'-]+", '', text)
+    return re.sub(r'[^ -~ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()\"’‘]+', '', text)
 
-def safe_text(text):
-    return text.encode("ascii", "ignore").decode()
+def fetch_rss_entries():
+    feeds = [
+        ("OpenAI Blog", "https://openai.com/blog/rss.xml"),
+        ("Product Hunt Launches", "https://www.producthunt.com/feed")
+    ]
+    entries = []
+    for source_name, feed_url in feeds:
+        try:
+            feed = feedparser.parse(feed_url)
+            for entry in feed.entries:
+                entries.append({
+                    "source": source_name,
+                    "title": entry.get("title", "No title"),
+                    "summary": entry.get("summary", "No summary"),
+                    "date": entry.get("published", entry.get("updated", "")),
+                    "url": entry.get("link", "#")
+                })
+        except Exception as e:
+            print(f"Błąd pobierania z {feed_url}: {e}")
+    return entries
 
-def get_openai_news():
-    url = "https://openai.com/blog"
-    r = requests.get(url)
-    soup = BeautifulSoup(r.text, 'html.parser')
-    articles = soup.find_all('a', class_='group block')
-    news = []
-    for a in articles[:5]:
-        title = a.find('h3')
-        link = a['href']
-        if title:
-            news.append({
-                "title": clean_text(title.text.strip()),
-                "url": f"https://openai.com{link}"
-            })
-    return news
+def parse_date(date_str):
+    try:
+        return datetime(*feedparser._parse_date(date_str)[:6])
+    except:
+        return datetime.utcnow() - timedelta(days=30)
 
-def get_producthunt_ai():
-    url = "https://www.producthunt.com/topics/artificial-intelligence"
-    r = requests.get(url)
-    soup = BeautifulSoup(r.text, 'html.parser')
-    scripts = soup.find_all('script')
-    ai_projects = []
-    for script in scripts:
-        if '__NEXT_DATA__' in script.text:
-            text = script.string
-            if text:
-                start = text.find('"products":')
-                end = text.find('"topic"', start)
-                raw = text[start:end]
-                projects = raw.split('name":')
-                for p in projects[1:6]:
-                    name = p.split('"')[1]
-                    ai_projects.append(clean_text(name))
-            break
-    return ai_projects
+def filter_entries(entries, keywords, days):
+    today = datetime.utcnow()
+    threshold = today - timedelta(days=days)
+    results = []
 
-def save_to_history(openai_news, ph_projects):
-    today = str(datetime.now().date())
-    data = {
-        "date": today,
-        "openai": openai_news,
-        "producthunt": ph_projects
-    }
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            history = json.load(f)
-    else:
-        history = []
+    for entry in entries:
+        try:
+            date = parse_date(entry["date"])
+            text = f"{entry.get('title', '')} {entry.get('summary', '')}".lower()
+            if date >= threshold and any(kw in text for kw in keywords):
+                entry["date"] = date.strftime("%Y-%m-%d")
+                results.append(entry)
+        except Exception as e:
+            print(f"Błąd przy analizie wpisu: {e}")
+            continue
 
-    history = [entry for entry in history if entry["date"] != today]
-    history.append(data)
+    return results
 
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
+# === Dane ===
+data = fetch_rss_entries()
+filtered_data = filter_entries(data, KEYWORDS, DAYS_BACK)
 
-def load_history(days=7):
-    if not os.path.exists(HISTORY_FILE):
-        return []
-    with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-        history = json.load(f)
-    cutoff = datetime.now().date() - timedelta(days=days)
-    return [entry for entry in history if datetime.strptime(entry["date"], "%Y-%m-%d").date() >= cutoff]
-
-# --- INTERFEJS ---
-
-st.title("🧠 Daily AI Digest – Archiwum 7 dni")
-st.write("Podsumowanie nowości z OpenAI i Product Hunt z ostatniego tygodnia.")
-
-if st.button("🔄 Odśwież dane (dzisiaj)"):
-    openai_news = get_openai_news()
-    ph_projects = get_producthunt_ai()
-    save_to_history(openai_news, ph_projects)
-    st.success("Dane zaktualizowane i zapisane w historii!")
-
-history = load_history()
-
-for entry in sorted(history, key=lambda x: x['date'], reverse=True):
-    st.subheader(f"📅 {entry['date']}")
-    st.markdown("**OpenAI Blog:**")
-    for item in entry["openai"]:
-        st.markdown(f"- [{item['title']}]({item['url']})")
-    st.markdown("**Product Hunt – AI Projects:**")
-    for name in entry["producthunt"]:
-        st.markdown(f"- {name}")
+# === UI ===
+st.title("\U0001F4C8 Daily AI Digest – Archiwum 7 dni")
+if not filtered_data:
+    st.info("Brak nowych wpisów z ostatnich 7 dni.")
+else:
+    for entry in filtered_data:
+        st.markdown(f"### [{clean_text(entry['title'])}]({entry['url']})")
+        st.markdown(f"**Źródło:** {entry['source']}  ")
+        st.markdown(f"**Data:** {entry['date']}  ")
+        st.markdown(clean_text(entry['summary']))
+        st.markdown("---")
