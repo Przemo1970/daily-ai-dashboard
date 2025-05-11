@@ -50,7 +50,6 @@ def generate_pdf(openai_news, ph_projects):
 
     font_path = "DejaVuSans.ttf"
     if not os.path.exists(font_path):
-        # Fallback czcionki do ścieżki systemowej
         font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
     pdf.add_font("DejaVu", "", font_path, uni=True)
@@ -60,14 +59,14 @@ def generate_pdf(openai_news, ph_projects):
     pdf.cell(200, 10, txt=str(datetime.now().date()), ln=True, align='C')
     pdf.ln(10)
 
-    pdf.set_font("DejaVu", 'B', size=12)
+    pdf.set_font("DejaVu", size=12)
     pdf.cell(200, 10, txt="🧠 OpenAI Blog", ln=True)
     pdf.set_font("DejaVu", size=11)
     for item in openai_news:
         pdf.multi_cell(0, 10, f"- {item['title']} ({item['url']})")
 
     pdf.ln(5)
-    pdf.set_font("DejaVu", 'B', size=12)
+    pdf.set_font("DejaVu", size=12)
     pdf.cell(200, 10, txt="🚀 Product Hunt – AI Projects", ln=True)
     pdf.set_font("DejaVu", size=11)
     for name in ph_projects:
