@@ -8,6 +8,9 @@ import re
 def clean_text(text):
     return re.sub(r'[^\x00-\x7FąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\w\.,:;?!@#&()"\']+', '', text)
 
+def safe_text(text):
+    return text.encode("ascii", "ignore").decode()
+
 def get_openai_news():
     url = "https://openai.com/blog"
     r = requests.get(url)
@@ -44,51 +47,5 @@ def get_producthunt_ai():
             break
     return ai_projects
 
-def generate_pdf(openai_news, ph_projects):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", size=12)
+def generate_pdf(_
 
-    pdf.cell(200, 10, txt="Daily AI Digest", ln=True, align='C')
-    pdf.cell(200, 10, txt=str(datetime.now().date()), ln=True, align='C')
-    pdf.ln(10)
-
-    pdf.set_font("Helvetica", size=12)
-    pdf.cell(200, 10, txt="OpenAI Blog", ln=True)
-    pdf.set_font("Helvetica", size=11)
-    for item in openai_news:
-        pdf.multi_cell(0, 10, f"- {item['title']} ({item['url']})")
-
-    pdf.ln(5)
-    pdf.set_font("Helvetica", size=12)
-    pdf.cell(200, 10, txt="Product Hunt – AI Projects", ln=True)
-    pdf.set_font("Helvetica", size=11)
-    for name in ph_projects:
-        pdf.cell(200, 10, f"- {name}", ln=True)
-
-    path = "/tmp/ai_digest.pdf"
-    pdf.output(path)
-    return path
-
-st.title("🧠 Daily AI Digest")
-st.write("Automatyczne podsumowanie nowości z OpenAI i Product Hunt")
-
-if st.button("🔄 Odśwież dane"):
-    openai_news = get_openai_news()
-    ph_projects = get_producthunt_ai()
-    st.success("Dane zostały zaktualizowane.")
-else:
-    openai_news = get_openai_news()
-    ph_projects = get_producthunt_ai()
-
-st.subheader("OpenAI Blog")
-for news in openai_news:
-    st.markdown(f"- [{news['title']}]({news['url']})")
-
-st.subheader("Top AI projekty z Product Hunt")
-for name in ph_projects:
-    st.markdown(f"- {name}")
-
-pdf_path = generate_pdf(openai_news, ph_projects)
-with open(pdf_path, "rb") as f:
-    st.download_button("📄 Pobierz PDF", f, file_name="daily_ai_digest.pdf")
